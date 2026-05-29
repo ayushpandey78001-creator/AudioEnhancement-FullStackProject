@@ -11,3 +11,8 @@ Task 3: Tune the enhancement parameters (if necessary) to balance aggressive noi
 #DATASET -
 https://www.youtube.com/watch?v=mLyOj_QD4a4
 
+#progress -
+
+used librispeech but and  torchaudio but it wasnt working due to config in pc 
+later used scipy and generated sine functions that mimiced the audio  of human but failed 
+and then 
