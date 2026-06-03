@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AudioClear — YouTube Audio Enhancer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface2: #1a1a25;
+    --border: rgba(255,255,255,0.08);
+    --border-accent: rgba(120,100,255,0.4);
+    --text: #f0eff8;
+    --muted: #7a7898;
+    --accent: #8b78ff;
+    --accent2: #c084fc;
+    --success: #34d399;
+    --danger: #f87171;
+    --mono: 'DM Mono', monospace;
+    --serif: 'Instrument Serif', serif;
+    --sans: 'DM Sans', sans-serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* Subtle grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(139,120,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(139,120,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Glow orb */
+  .glow {
+    position: fixed;
+    top: -200px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 800px;
+    height: 400px;
+    background: radial-gradient(ellipse, rgba(139,120,255,0.12) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 700px;
+    padding: 80px 24px 60px;
+  }
+
+  /* Header */
+  .header {
+    text-align: center;
+    margin-bottom: 56px;
+  }
+
+  .logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 28px;
+  }
+
+  .logo-icon {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .logo-icon svg { width: 22px; height: 22px; }
+
+  .logo-text {
+    font-family: var(--mono);
+    font-size: 18px;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+  }
+
+  h1 {
+    font-family: var(--serif);
+    font-size: clamp(36px, 6vw, 52px);
+    font-weight: 400;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    margin-bottom: 16px;
+  }
+
+  h1 em {
+    font-style: italic;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .subtitle {
+    font-size: 15px;
+    color: var(--muted);
+    font-weight: 300;
+    line-height: 1.6;
+    max-width: 440px;
+    margin: 0 auto;
+  }
+
+  /* Card */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 32px;
+    margin-bottom: 24px;
+  }
+
+  /* Input area */
+  .input-label {
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    display: block;
+  }
+
+  .input-row {
+    display: flex;
+    gap: 10px;
+  }
+
+  .url-input {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .url-input::placeholder { color: var(--muted); }
+  .url-input:focus { border-color: var(--border-accent); }
+
+  .btn {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border: none;
+    border-radius: 10px;
+    padding: 14px 24px;
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 500;
+    color: #fff;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.15s;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .btn:hover:not(:disabled) { opacity: 0.88; }
+  .btn:active:not(:disabled) { transform: scale(0.97); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* Pipeline steps */
+  .steps {
+    display: none;
+    flex-direction: column;
+    gap: 0;
+    margin-top: 24px;
+    border-top: 1px solid var(--border);
+    padding-top: 24px;
+  }
+
+  .steps.visible { display: flex; }
+
+  .step {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 10px 0;
+    position: relative;
+  }
+
+  .step:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    left: 15px;
+    top: 36px;
+    bottom: -10px;
+    width: 1px;
+    background: var(--border);
+  }
+
+  .step-dot {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 13px;
+    font-family: var(--mono);
+    color: var(--muted);
+    transition: all 0.3s;
+  }
+
+  .step.active .step-dot {
+    border-color: var(--accent);
+    background: rgba(139,120,255,0.1);
+    color: var(--accent);
+    animation: pulse 1.5s ease infinite;
+  }
+
+  .step.done .step-dot {
+    border-color: var(--success);
+    background: rgba(52,211,153,0.1);
+    color: var(--success);
+  }
+
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(139,120,255,0.3); }
+    50% { box-shadow: 0 0 0 6px rgba(139,120,255,0); }
+  }
+
+  .step-info { flex: 1; padding-top: 4px; }
+
+  .step-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--muted);
+    transition: color 0.3s;
+  }
+
+  .step.active .step-name { color: var(--text); }
+  .step.done .step-name { color: var(--muted); }
+
+  .step-detail {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  /* Result card */
+  .result-card {
+    display: none;
+    background: var(--surface);
+    border: 1px solid rgba(52,211,153,0.2);
+    border-radius: 20px;
+    padding: 28px 32px;
+    margin-bottom: 24px;
+  }
+
+  .result-card.visible { display: block; }
+
+  .result-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .result-badge {
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--success);
+    background: rgba(52,211,153,0.1);
+    border: 1px solid rgba(52,211,153,0.2);
+    border-radius: 20px;
+    padding: 4px 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .result-title {
+    font-size: 14px;
+    color: var(--muted);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  audio {
+    width: 100%;
+    height: 40px;
+    margin-bottom: 16px;
+    accent-color: var(--accent);
+    filter: invert(0);
+  }
+
+  .download-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: center;
+    width: 100%;
+    background: transparent;
+    border: 1px solid var(--border-accent);
+    border-radius: 10px;
+    padding: 12px;
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--accent);
+    text-decoration: none;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .download-btn:hover { background: rgba(139,120,255,0.08); }
+
+  /* Error */
+  .error-box {
+    display: none;
+    background: rgba(248,113,113,0.06);
+    border: 1px solid rgba(248,113,113,0.25);
+    border-radius: 12px;
+    padding: 16px 20px;
+    font-size: 13px;
+    color: var(--danger);
+    font-family: var(--mono);
+    margin-top: 16px;
+  }
+
+  .error-box.visible { display: block; }
+
+  /* Features strip */
+  .features {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 8px;
+  }
+
+  .feature {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .feature svg { width: 14px; height: 14px; color: var(--accent); }
+
+  /* Waveform animation */
+  .waveform {
+    display: none;
+    align-items: center;
+    gap: 3px;
+    height: 20px;
+  }
+  .waveform.visible { display: flex; }
+  .bar {
+    width: 3px;
+    border-radius: 2px;
+    background: var(--accent);
+    animation: wave 1s ease-in-out infinite;
+  }
+  .bar:nth-child(1) { height: 8px; animation-delay: 0s; }
+  .bar:nth-child(2) { height: 14px; animation-delay: 0.1s; }
+  .bar:nth-child(3) { height: 20px; animation-delay: 0.2s; }
+  .bar:nth-child(4) { height: 14px; animation-delay: 0.3s; }
+  .bar:nth-child(5) { height: 8px; animation-delay: 0.4s; }
+  @keyframes wave {
+    0%, 100% { transform: scaleY(0.5); opacity: 0.5; }
+    50% { transform: scaleY(1); opacity: 1; }
+  }
+</style>
+</head>
+<body>
+<div class="glow"></div>
+<div class="container">
+
+  <header class="header">
+    <div class="logo">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round">
+          <path d="M9 18V5l12-2v13"/>
+          <circle cx="6" cy="18" r="3"/>
+          <circle cx="18" cy="16" r="3"/>
+        </svg>
+      </div>
+      <span class="logo-text">audioclear</span>
+    </div>
+    <h1>Clean audio from<br /><em>any YouTube video</em></h1>
+    <p class="subtitle">Paste a YouTube link. We download the audio, run non-stationary noise reduction, and hand back a crystal-clear WAV file.</p>
+  </header>
+
+  <div class="card">
+    <label class="input-label" for="yt-url">YouTube URL</label>
+    <div class="input-row">
+      <input
+        id="yt-url"
+        class="url-input"
+        type="url"
+        placeholder="https://www.youtube.com/watch?v=..."
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <button class="btn" id="enhance-btn" onclick="startEnhance()">
+        <div class="waveform" id="btn-wave">
+          <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+        </div>
+        <span id="btn-label">Enhance</span>
+      </button>
+    </div>
+
+    <div class="steps" id="steps">
+      <div class="step" id="step-0">
+        <div class="step-dot">01</div>
+        <div class="step-info">
+          <div class="step-name">Fetching audio stream</div>
+          <div class="step-detail">yt-dlp · bestaudio/best · 192kbps mp3</div>
+        </div>
+      </div>
+      <div class="step" id="step-1">
+        <div class="step-dot">02</div>
+        <div class="step-info">
+          <div class="step-name">Loading & analysing waveform</div>
+          <div class="step-detail">librosa · preserving native sample rate</div>
+        </div>
+      </div>
+      <div class="step" id="step-2">
+        <div class="step-dot">03</div>
+        <div class="step-info">
+          <div class="step-name">Noise reduction pass</div>
+          <div class="step-detail">noisereduce · non-stationary spectral gating</div>
+        </div>
+      </div>
+      <div class="step" id="step-3">
+        <div class="step-dot">04</div>
+        <div class="step-info">
+          <div class="step-name">Writing output file</div>
+          <div class="step-detail">soundfile · lossless WAV export</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="error-box" id="error-box"></div>
+  </div>
+
+  <div class="result-card" id="result-card">
+    <div class="result-header">
+      <span class="result-badge">✓ enhanced</span>
+      <span class="result-title" id="result-title">—</span>
+    </div>
+    <audio id="audio-player" controls></audio>
+    <a class="download-btn" id="download-link" href="#" download="enhanced_audio.wav">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16">
+        <path d="M8 2v8m0 0-3-3m3 3 3-3M2 12h12" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Download enhanced.wav
+    </a>
+  </div>
+
+  <div class="features">
+    <div class="feature">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1v14M1 8h14" stroke-linecap="round"/></svg>
+      Non-stationary noise reduction
+    </div>
+    <div class="feature">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 8a5 5 0 1 0 10 0A5 5 0 0 0 3 8z"/></svg>
+      Lossless WAV output
+    </div>
+    <div class="feature">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h12v8H2z" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 4V2m6 2V2" stroke-linecap="round"/></svg>
+      Runs fully server-side
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const API_BASE = '';
+  let currentJobId = null;
+
+  function setStep(active) {
+    for (let i = 0; i < 4; i++) {
+      const el = document.getElementById('step-' + i);
+      el.classList.remove('active', 'done');
+      if (i < active) el.classList.add('done');
+      else if (i === active) el.classList.add('active');
+    }
+  }
+
+  function showError(msg) {
+    const box = document.getElementById('error-box');
+    box.textContent = '⚠ ' + msg;
+    box.classList.add('visible');
+  }
+
+  function hideError() {
+    document.getElementById('error-box').classList.remove('visible');
+  }
+
+  function setLoading(yes) {
+    const btn = document.getElementById('enhance-btn');
+    const wave = document.getElementById('btn-wave');
+    const label = document.getElementById('btn-label');
+    btn.disabled = yes;
+    wave.classList.toggle('visible', yes);
+    label.textContent = yes ? 'Processing…' : 'Enhance';
+    if (yes) label.style.display = 'none';
+    else label.style.display = '';
+  }
+
+  async function startEnhance() {
+    const url = document.getElementById('yt-url').value.trim();
+    if (!url) { showError('Please enter a YouTube URL.'); return; }
+
+    hideError();
+    setLoading(true);
+    document.getElementById('result-card').classList.remove('visible');
+    document.getElementById('steps').classList.add('visible');
+    setStep(0);
+
+    // Simulate step progression while waiting for the server
+    const stepTimers = [
+      setTimeout(() => setStep(1), 4000),
+      setTimeout(() => setStep(2), 12000),
+      setTimeout(() => setStep(3), 22000),
+    ];
+
+    try {
+      const res = await fetch(API_BASE + '/enhance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+      stepTimers.forEach(clearTimeout);
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || 'Server error');
+      }
+
+      const data = await res.json();
+      currentJobId = data.job_id;
+
+      setStep(4); // all done
+      showResult(data.job_id, data.title);
+    } catch (e) {
+      stepTimers.forEach(clearTimeout);
+      showError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function showResult(jobId, title) {
+    const card = document.getElementById('result-card');
+    document.getElementById('result-title').textContent = title;
+
+    const dlUrl = API_BASE + '/download/' + jobId;
+    const audio = document.getElementById('audio-player');
+    audio.src = dlUrl;
+
+    const dlLink = document.getElementById('download-link');
+    dlLink.href = dlUrl;
+
+    card.classList.add('visible');
+    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // Allow Enter key
+  document.getElementById('yt-url').addEventListener('keydown', e => {
+    if (e.key === 'Enter') startEnhance();
+  });
+</script>
+</body>
+</html>
