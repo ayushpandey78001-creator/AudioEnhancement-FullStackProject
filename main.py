@@ -31,12 +31,18 @@ def run_pipeline(job_id: str, url: str):
     import soundfile as sf
     import noisereduce as nr
     import yt_dlp
+    import torch
+    from voicefixer import VoiceFixer
+    from pedalboard import Pedalboard, HighpassFilter, PeakFilter, Compressor, Gain
 
     job_dir = WORK_DIR / job_id
     job_dir.mkdir(parents=True, exist_ok=True)
     raw_path = str(job_dir / "raw.%(ext)s")
+    converted_path = str(job_dir / "converted.wav")
+    restored_path = str(job_dir / "restored.wav")
     output_path = str(job_dir / "enhanced.wav")
 
+    # 1. Download from YouTube
     ydl_opts = {
         "format": "bestaudio/best",
         "outtmpl": raw_path,
@@ -48,20 +54,38 @@ def run_pipeline(job_id: str, url: str):
         "quiet": True,
         "no_warnings": True,
     }
-
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
         title = info.get("title", "audio")
 
-    # Find the downloaded file
     downloaded = list(job_dir.glob("raw.*"))
     if not downloaded:
         raise RuntimeError("Download failed: no audio file found")
     input_path = str(downloaded[0])
 
-    audio_data, sample_rate = librosa.load(input_path, sr=None)
-    reduced = nr.reduce_noise(y=audio_data, sr=sample_rate, stationary=False)
-    sf.write(output_path, reduced, sample_rate)
+    # 2. Convert to WAV
+    audio_signal, sample_rate = librosa.load(input_path, sr=44100)
+    sf.write(converted_path, audio_signal, sample_rate)
+
+    # 3. VoiceFixer AI restoration
+    vf = VoiceFixer()
+    vf.restore(
+        input=converted_path,
+        output=restored_path,
+        cuda=torch.cuda.is_available(),
+        mode=0
+    )
+
+    # 4. DSP mastering chain
+    audio_data, sample_rate = librosa.load(restored_path, sr=None)
+    dsp_board = Pedalboard([
+        HighpassFilter(cutoff_frequency_hz=85.0),
+        PeakFilter(cutoff_frequency_hz=6000.0, gain_db=6.0, q=0.7),
+        Compressor(threshold_db=-14.0, ratio=3.0, attack_ms=10.0, release_ms=100.0),
+        Gain(gain_db=2.0)
+    ])
+    mastered = dsp_board(audio_data, sample_rate)
+    sf.write(output_path, mastered, sample_rate)
 
     return output_path, title
 
