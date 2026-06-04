@@ -142,6 +142,17 @@ AudioEnhancement-FullStackProject/
 ---
 
 ## How It Works
+## Enhanced Pipeline (VoiceFixer)
+
+The `notebooks/voicefixer_pipeline.ipynb` notebook uses a 4-stage pipeline:
+
+1. **yt-dlp** — downloads YouTube audio as MP3
+2. **librosa** — converts to standardized WAV
+3. **VoiceFixer** — neural network AI restores speech quality
+4. **Pedalboard DSP** — applies EQ, compression and gain mastering
+
+This produces significantly cleaner output than the basic noisereduce pass.
+Run it in Google Colab (free GPU recommended) for best results.
 
 1. You paste a YouTube URL into the frontend
 2. The backend uses **yt-dlp** to download the best quality audio as MP3
