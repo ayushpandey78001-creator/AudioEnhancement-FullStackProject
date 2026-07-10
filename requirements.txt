@@ -1,9 +1,11 @@
 fastapi>=0.110.0
 uvicorn[standard]>=0.29.0
 yt-dlp>=2024.4.9
-noisereduce>=3.0.3
 librosa>=0.10.0
 soundfile>=0.12.1
 python-multipart>=0.0.9
-git+https://github.com/haoheliu/voicefixer.git
 pedalboard>=0.9.0
+numpy==1.26.4
+torch==2.3.0
+torchaudio==2.3.0
+deepfilternet>=0.5.6

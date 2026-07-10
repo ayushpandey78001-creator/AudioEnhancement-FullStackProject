@@ -1,8 +1,8 @@
 # AudioEnhancement — Full Stack Project
 
-A web app that takes a YouTube URL, downloads the audio, runs non-stationary noise reduction, and gives back a clean WAV file — ready to download and play.
+A web app that takes a YouTube URL, downloads the audio, runs it through **DeepFilterNet** AI noise removal, and gives back a mastered WAV file — ready to download and play.
 
-**Stack:** FastAPI · yt-dlp · librosa · noisereduce · soundfile · Vanilla HTML/CSS/JS
+**Stack:** FastAPI · yt-dlp · librosa · DeepFilterNet · Pedalboard · Vanilla HTML/CSS/JS
 
 ---
 
@@ -13,6 +13,7 @@ Before you start, make sure you have:
 - **Python 3.10 or higher** — check with `python --version`
 - **Git** — check with `git --version`
 - **FFmpeg** — installation steps are below
+- **(Only if the pip install fails)** a **Rust toolchain** — DeepFilterNet ships prebuilt wheels for most platforms, so plain `pip install deepfilternet` usually just works. Rust is only needed if pip has to build it from source for your OS/Python version (see Step 4 troubleshooting below).
 
 ---
 
@@ -98,9 +99,20 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-This installs: `fastapi`, `uvicorn`, `yt-dlp`, `librosa`, `noisereduce`, `soundfile`, `python-multipart`.
+This installs: `fastapi`, `uvicorn`, `yt-dlp`, `librosa`, `soundfile`, `python-multipart`, `pedalboard`, `torch`, `torchaudio`, and `deepfilternet`.
 
-Takes 1–3 minutes depending on your internet speed.
+Takes 3–8 minutes depending on your internet speed (torch is the largest download).
+
+**If `deepfilternet` fails to install** with a build/compile error (rather than a simple network timeout), it means pip couldn't find a prebuilt wheel for your platform and is trying to compile from Rust source. Install Rust first, then retry:
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+source "$HOME/.cargo/env"
+pip install maturin
+pip install -r requirements.txt
+```
+
+(Windows users: install Rust via https://rustup.rs instead of the curl script.)
 
 ---
 
@@ -125,6 +137,8 @@ http://localhost:8000
 
 Paste any YouTube URL, click **Enhance**, and download the cleaned WAV file.
 
+> **Note:** The first request after starting the server will be slower than the rest — DeepFilterNet's model weights load into memory on the first call and are cached for every request after that.
+
 ---
 
 ## Project Structure
@@ -133,7 +147,6 @@ Paste any YouTube URL, click **Enhance**, and download the cleaned WAV file.
 AudioEnhancement-FullStackProject/
 ├── main.py              ← FastAPI backend (audio pipeline)
 ├── requirements.txt     ← Python dependencies
-├── final.ipynb          ← Original Colab notebook (reference)
 ├── static/
 │   └── index.html       ← Frontend UI
 └── README.md
@@ -142,24 +155,14 @@ AudioEnhancement-FullStackProject/
 ---
 
 ## How It Works
-## Enhanced Pipeline (VoiceFixer)
-
-The `notebooks/voicefixer_pipeline.ipynb` notebook uses a 4-stage pipeline:
-
-1. **yt-dlp** — downloads YouTube audio as MP3
-2. **librosa** — converts to standardized WAV
-3. **VoiceFixer** — neural network AI restores speech quality
-4. **Pedalboard DSP** — applies EQ, compression and gain mastering
-
-This produces significantly cleaner output than the basic noisereduce pass.
-Run it in Google Colab (free GPU recommended) for best results.
 
 1. You paste a YouTube URL into the frontend
 2. The backend uses **yt-dlp** to download the best quality audio as MP3
-3. **librosa** loads the audio at its native sample rate
-4. **noisereduce** runs a non-stationary spectral gating pass to remove background noise
-5. **soundfile** writes the cleaned output as a lossless WAV
-6. The file is served back to your browser for playback and download
+3. **librosa** resamples it to 48kHz — the sample rate DeepFilterNet requires
+4. **DeepFilterNet** runs deep-learning-based noise suppression on the audio (loaded once per server process and reused across requests)
+5. **Pedalboard** applies a mastering chain — highpass filter, presence-boost EQ, compression, and gain
+6. **soundfile** writes the final cleaned output as a lossless WAV
+7. The file is served back to your browser for playback and download
 
 ---
 
@@ -171,6 +174,8 @@ Run it in Google Colab (free GPU recommended) for best results.
 | `ffprobe and ffmpeg not found` | FFmpeg is not installed or not on PATH. Follow Step 2 again and restart your terminal |
 | `Directory 'static' does not exist` | Make sure `index.html` is inside a `static/` folder next to `main.py` |
 | `ModuleNotFoundError` | You forgot to activate the venv. Run the activate command from Step 3 |
+| `ModuleNotFoundError: No module named 'df'` | `deepfilternet` didn't install correctly — retry Step 4, and if it fails on a build step, follow the Rust toolchain instructions there |
+| Build error installing `deepfilternet` | No prebuilt wheel for your platform/Python version — install Rust + `maturin` as shown in Step 4, then retry |
 | Port 8000 already in use | Run on a different port: `uvicorn main:app --port 8001` |
 
 ---

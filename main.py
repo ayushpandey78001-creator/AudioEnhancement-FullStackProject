@@ -23,22 +23,39 @@ app.add_middleware(
 WORK_DIR = Path(os.environ.get("TEMP", os.environ.get("TMPDIR", "/tmp"))) / "audioclear"
 WORK_DIR.mkdir(parents=True, exist_ok=True)
 
+# ---------------------------------------------------------------------------
+# DeepFilterNet model cache
+# Loaded once at process startup (first request) instead of per-request —
+# init_df() loads network weights and is far too slow to repeat every call.
+# ---------------------------------------------------------------------------
+_dfn_model = None
+_dfn_state = None
+
+
+def get_dfn_model():
+    global _dfn_model, _dfn_state
+    if _dfn_model is None:
+        from df import init_df
+        _dfn_model, _dfn_state, _ = init_df()
+    return _dfn_model, _dfn_state
+
+
 class EnhanceRequest(BaseModel):
     url: str
+
 
 def run_pipeline(job_id: str, url: str):
     import librosa
     import soundfile as sf
-    import noisereduce as nr
     import yt_dlp
-    import torch
-    from voicefixer import VoiceFixer
+    import torchaudio
+    from df import enhance
     from pedalboard import Pedalboard, HighpassFilter, PeakFilter, Compressor, Gain
 
     job_dir = WORK_DIR / job_id
     job_dir.mkdir(parents=True, exist_ok=True)
     raw_path = str(job_dir / "raw.%(ext)s")
-    converted_path = str(job_dir / "converted.wav")
+    converted_path = str(job_dir / "converted_48k.wav")  # DeepFilterNet requires 48kHz
     restored_path = str(job_dir / "restored.wav")
     output_path = str(job_dir / "enhanced.wav")
 
@@ -63,18 +80,15 @@ def run_pipeline(job_id: str, url: str):
         raise RuntimeError("Download failed: no audio file found")
     input_path = str(downloaded[0])
 
-    # 2. Convert to WAV
-    audio_signal, sample_rate = librosa.load(input_path, sr=44100)
+    # 2. Convert to WAV at 48kHz — DeepFilterNet is trained on and requires 48kHz audio
+    audio_signal, sample_rate = librosa.load(input_path, sr=48000)
     sf.write(converted_path, audio_signal, sample_rate)
 
-    # 3. VoiceFixer AI restoration
-    vf = VoiceFixer()
-    vf.restore(
-        input=converted_path,
-        output=restored_path,
-        cuda=torch.cuda.is_available(),
-        mode=0
-    )
+    # 3. DeepFilterNet restoration
+    dfn_model, dfn_state = get_dfn_model()
+    audio_tensor, sr = torchaudio.load(converted_path)
+    enhanced_tensor = enhance(dfn_model, dfn_state, audio_tensor)
+    torchaudio.save(restored_path, enhanced_tensor, sr)
 
     # 4. DSP mastering chain
     audio_data, sample_rate = librosa.load(restored_path, sr=None)
@@ -88,6 +102,7 @@ def run_pipeline(job_id: str, url: str):
     sf.write(output_path, mastered, sample_rate)
 
     return output_path, title
+
 
 @app.post("/enhance")
 async def enhance(req: EnhanceRequest):
@@ -109,6 +124,7 @@ async def enhance(req: EnhanceRequest):
 
     return JSONResponse({"job_id": job_id, "title": title})
 
+
 @app.get("/download/{job_id}")
 def download(job_id: str):
     if not all(c in "0123456789abcdef-" for c in job_id):
@@ -122,9 +138,11 @@ def download(job_id: str):
         filename="enhanced_audio.wav",
     )
 
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
 
 # Serve frontend — path relative to this file, works on any OS
 STATIC_DIR = Path(__file__).parent / "static"
